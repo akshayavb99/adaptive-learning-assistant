@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import unittest
 from pathlib import Path
@@ -288,6 +288,19 @@ class InsertionTests(unittest.TestCase):
         self.assertIn("- first item\n\n- second item", chunks[0])
         self.assertIn("first = 1\n\nsecond = 2", chunks[1])
 
+    def test_low_information_fragments_do_not_create_chunks(self):
+        chunks = RAGRetriever._chunk_document("# Topic\n\nwhere")
+        self.assertEqual(chunks, [])
+
+    def test_structural_separators_do_not_create_heading_only_chunks(self):
+        content = "# Logistic Regression\n\n## Definition\n\n---\n\nLogistic regression predicts probabilities for a binary outcome."
+
+        chunks = RAGRetriever._chunk_document(content)
+
+        self.assertEqual(chunks, [
+            "# Logistic Regression\n## Definition\n\nLogistic regression predicts probabilities for a binary outcome."
+        ])
+        self.assertTrue(all("---" not in chunk for chunk in chunks))
     def test_long_paragraph_fallback_uses_sentence_boundaries(self):
         sentence = "This is a complete sentence. "
         content = "# Details\n\n" + (sentence * 30).strip()

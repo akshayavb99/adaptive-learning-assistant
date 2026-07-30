@@ -275,9 +275,9 @@ with st.sidebar:
             st.session_state.selected_topics = selected_topics or [client.select_random_topic()]
             st.session_state.num_questions = int(question_count)
             candidate_chunks = client.retrieve(st.session_state.selected_topics)
-            st.session_state.scheduled_chunks = client._schedule_chunks(
+            st.session_state.scheduled_chunks = client.randomize_schedule(client._schedule_chunks(
                 candidate_chunks, st.session_state.num_questions
-            )
+            ))
             if not st.session_state.scheduled_chunks:
                 raise RuntimeError("The retriever returned no document chunks")
             st.session_state.question_number = 1
@@ -349,8 +349,13 @@ with test_tab:
                         st.session_state.test_active = False
                     else:
                         st.session_state.question_number += 1
-                        prepare_question(client)
-                    st.rerun()
+                        try:
+                            prepare_question(client)
+                        except Exception as exc:
+                            st.session_state.test_active = False
+                            st.error(f"Could not load the next question: {exc}")
+                        else:
+                            st.rerun()
             else:
                 with st.form(f"answer_form_{st.session_state.question_number}"):
                     answer = answer_widget(question)

@@ -192,6 +192,39 @@ class OpenAIRAGClientTests(unittest.TestCase):
         self.assertIn("Python context", fake.responses.calls[0]["input"])
         self.assertIn("Python; Databases", fake.responses.calls[0]["input"])
 
+    def test_generation_prompt_requires_specific_questions(self):
+        fake = FakeOpenAI([json.dumps(question())])
+        wrapper = OpenAIRAGClient(FakeRetriever(), client=fake)
+
+        wrapper.generate_question("Python", wrapper.retrieve("Python"), 3)
+
+        prompt = fake.responses.calls[0]["input"]
+        self.assertIn("Question specificity requirements", prompt)
+        self.assertIn("concrete fact", prompt)
+        self.assertIn("Avoid vague stems", prompt)
+        self.assertIn("Conceptual knowledge requirements", prompt)
+        self.assertIn("Never ask which heading", prompt)
+        self.assertIn("meaningful if all Markdown headings", prompt)
+
+    def test_quality_failure_exposes_scores_and_explanations(self):
+        failed_judgment = json.dumps(judge_payload((2, 2, 2, 2)))
+        outputs = [
+            json.dumps(question()), failed_judgment,
+            json.dumps(question()), failed_judgment,
+            json.dumps(question()), failed_judgment,
+        ]
+        wrapper = OpenAIRAGClient(FakeRetriever(), client=FakeOpenAI(outputs))
+
+        with self.assertRaises(RuntimeError) as context:
+            wrapper.generate_validated_question(
+                "Python", wrapper.retrieve("Python"), 3
+            )
+
+        message = str(context.exception)
+        self.assertIn("overall score 2.0/5", message)
+        self.assertIn("Groundedness: Grounded.", message)
+        self.assertIn("required 4.0", message)
+
     def test_failed_pair_is_regenerated_before_returning(self):
         outputs = [json.dumps(question()), json.dumps(judge_payload((3, 3, 3, 3))), json.dumps(question()), json.dumps(judge_payload())]
         wrapper = OpenAIRAGClient(FakeRetriever(), client=FakeOpenAI(outputs))
@@ -334,9 +367,41 @@ class OpenAIRAGClientTests(unittest.TestCase):
             output_fn=lambda output: None,
         )
 
-        self.assertEqual(wrapper.generated_chunks, ["a.md", "b.md", "c.md", "a.md", "b.md"])
+        self.assertEqual(len(wrapper.generated_chunks), 5)
         self.assertEqual(wrapper.graded_chunks, wrapper.generated_chunks)
+        self.assertEqual(
+            sorted(wrapper.generated_chunks),
+            sorted(["a.md", "b.md", "c.md", "a.md", "b.md"]),
+        )
+        self.assertTrue(
+            all(
+                wrapper.generated_chunks[index] != wrapper.generated_chunks[index - 1]
+                for index in range(1, len(wrapper.generated_chunks))
+            )
+        )
         self.assertEqual(summary["total"], 5)
+
+    def test_randomize_schedule_changes_order_without_adjacent_repeats(self):
+        chunks = [
+            {"source_path": "a.md", "chunk_index": 0, "content": "a"},
+            {"source_path": "b.md", "chunk_index": 0, "content": "b"},
+            {"source_path": "c.md", "chunk_index": 0, "content": "c"},
+        ]
+        wrapper = OpenAIRAGClient(
+            FakeRetriever(), client=FakeOpenAI([]), rng=random.Random(7)
+        )
+        schedule = OpenAIRAGClient._schedule_chunks(chunks, 6)
+
+        randomized = wrapper.randomize_schedule(schedule)
+
+        self.assertCountEqual(randomized, schedule)
+        self.assertNotEqual(randomized, schedule)
+        self.assertTrue(
+            all(
+                randomized[index] != randomized[index - 1]
+                for index in range(1, len(randomized))
+            )
+        )
 
     def test_run_test_without_topic_retrieves_one_chunk_per_question(self):
         class NoTopicRetriever(FakeRetriever):

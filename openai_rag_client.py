@@ -184,6 +184,25 @@ class OpenAIRAGClient:
         """Return a stable identity for a retrieved chunk."""
         return (chunk.get("source_path"), chunk.get("chunk_index"), chunk.get("content"))
 
+    def randomize_schedule(self, schedule: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return a randomized schedule without adjacent chunk repeats when possible."""
+        original = list(schedule)
+        if len(original) < 2:
+            return original
+
+        for _ in range(10):
+            randomized = list(original)
+            self.rng.shuffle(randomized)
+            if all(
+                self._chunk_key(randomized[index]) != self._chunk_key(randomized[index - 1])
+                for index in range(1, len(randomized))
+            ):
+                return randomized
+
+        # The deterministic round-robin schedule already avoids adjacent repeats
+        # whenever at least two unique chunks are available.
+        return original
+
     @classmethod
     def _schedule_chunks(
         cls, chunks: list[dict[str, Any]], count: int
@@ -273,6 +292,15 @@ class OpenAIRAGClient:
             [item.get("question", "") for item in (history or [])],
             ensure_ascii=False,
         )
+        question_angles = (
+            "explain a mechanism or cause",
+            "identify an effect or consequence",
+            "compare two related concepts",
+            "apply a concept to a concrete scenario",
+            "explain a trade-off or design decision",
+            "trace a process or sequence",
+        )
+        question_angle = self.rng.choice(question_angles)
         prompt = f"""You are an adaptive test question writer.
 Create exactly one short question about the topic using only the supplied knowledge-base context.
 Difficulty is {difficulty} on a scale from 1 (introductory) to 5 (advanced).
@@ -281,6 +309,23 @@ Keep the question concise and unambiguous. For short_answer, options must be an 
 For single_choice and multiple_choice, provide 2-5 options. expected_answer must contain the exact
 answer text or answer texts from the options for choice questions. Do not reveal the answer in the
 question. Avoid repeating any question from the test history.
+
+Question specificity requirements:
+- Test one concrete fact, relationship, operation, property, comparison, or consequence from the context.
+- Anchor the question to a named concept or detail that appears in the supplied context.
+- Include enough context-specific detail to distinguish this question from a generic definition.
+- Avoid vague stems such as "What is the purpose?", "What is the main purpose?", or "What is this?".
+- Avoid broad summaries; ask something that can be answered precisely from the supplied context.
+- For short_answer, expect a concise, specific answer rather than a broad explanation.
+
+Conceptual knowledge requirements:
+- Test understanding of mechanisms, causes, effects, relationships, trade-offs, procedures, or applications.
+- Use headings only as invisible context; never make a heading, section title, file name, source location, or exact title the subject of the question.
+- Never ask which heading contains information, what a heading is called, the exact name of a section, or where a fact appears in the notes.
+- Do not ask the learner to identify, recall, quote, or reproduce wording from the source structure.
+- The question must remain meaningful if all Markdown headings and file names are removed from the context.
+- Do not repeat the answer or its decisive phrase in the question.
+- Use this conceptual angle for this attempt: {question_angle}.
 
 Topics: {self._topic_label(topic)}
 Previous questions in this test (do not repeat any of them): {history_text}
@@ -335,6 +380,11 @@ Groundedness means the question and answer are supported by the context.
 Answer correctness means the expected answer is correct according to the context.
 Clarity means the question is concise, unambiguous, and answerable.
 Difficulty means the actual difficulty matches the assigned difficulty.
+Clarity and specificity require a concrete, context-anchored question rather than a vague or generic prompt.
+Penalize broad questions that could be answered without the supplied context.
+Reject questions about heading names, section titles, file names, source locations, or the wording of the notes; headings may provide context but are not conceptual knowledge.
+Reject questions that reveal the expected answer or decisive answer phrase in the question itself.
+A passing question must test conceptual understanding of a mechanism, cause, effect, relationship, trade-off, procedure, or application.
 Do not evaluate a learner answer; there is no learner answer in this review.
 Return concise explanations for every score.
 
@@ -376,6 +426,29 @@ Knowledge-base context:
                 if judgment["passed"]:
                     question["quality_judgment"] = judgment
                     return question
+                explanations = "; ".join(
+                    f"{label}: {judgment.get(field, '')}"
+                    for label, field in (
+                        ("Groundedness", "groundedness_explanation"),
+                        ("Answer correctness", "answer_correctness_explanation"),
+                        ("Clarity", "clarity_explanation"),
+                        ("Difficulty", "difficulty_explanation"),
+                    )
+                )
+                score_summary = ", ".join(
+                    f"{field.removesuffix('_score')}={judgment[field]}/5"
+                    for field in (
+                        "groundedness_score",
+                        "answer_correctness_score",
+                        "clarity_score",
+                        "difficulty_score",
+                    )
+                )
+                last_error = RuntimeError(
+                    f"Quality judge rejected attempt {attempt}: overall score "
+                    f"{judgment['overall_score']:.1f}/5 (required {self.judge_pass_threshold:.1f}); "
+                    f"{score_summary}. {explanations}"
+                )
             except Exception as exc:
                 last_error = exc
                 if question is not None:
@@ -383,7 +456,11 @@ Knowledge-base context:
                         self._persist_judgment(question, chunks, difficulty, attempt, None, "error")
                     except Exception:
                         logger.warning("Could not persist failed question judgment", exc_info=True)
-        raise RuntimeError("Could not generate a quality-approved question") from last_error
+        if last_error is None:
+            last_error = RuntimeError("No question-generation attempt completed")
+        raise RuntimeError(
+            f"Could not generate a quality-approved question: {last_error}"
+        ) from last_error
     @staticmethod
     def _validate_question(question: dict[str, Any]) -> None:
         question_type = question.get("question_type")
@@ -466,14 +543,14 @@ Knowledge-base context:
             raise RuntimeError("The retriever returned no document chunks")
 
         if not topic_provided:
-            chunk_schedule = self._schedule_chunks(chunks, num_questions)
+            chunk_schedule = self.randomize_schedule(self._schedule_chunks(chunks, num_questions))
             if len(chunk_schedule) != num_questions:
                 raise RuntimeError(
                     f"Requested {num_questions} questions but retrieved "
                     f"only {len(chunk_schedule)} distinct chunks"
                 )
         else:
-            chunk_schedule = self._schedule_chunks(chunks, num_questions)
+            chunk_schedule = self.randomize_schedule(self._schedule_chunks(chunks, num_questions))
 
         total_questions = len(chunk_schedule)
         for question_number, chunk in enumerate(chunk_schedule, 1):

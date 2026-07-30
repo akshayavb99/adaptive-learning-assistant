@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -15,6 +15,8 @@ HYBRID_CANDIDATE_MULTIPLIER = 4
 HEADING_PATTERN = re.compile(r"^\s{0,3}#{1,6}\s+.+$")
 FENCE_PATTERN = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)")
+HORIZONTAL_RULE_PATTERN = re.compile(r"^\s{0,3}(?:(?:-\s*){3,}|(?:\*\s*){3,}|(?:_\s*){3,})$")
+LOW_INFORMATION_FRAGMENTS = {"where", "and", "or", "because", "therefore"}
 
 
 class RAGRetriever:
@@ -82,6 +84,18 @@ class RAGRetriever:
             if not text:
                 return
 
+            # Markdown separators are layout, not learning content. They can
+            # otherwise become a chunk when they follow a heading.
+            substantive_lines = [
+                line for line in text.splitlines()
+                if line.strip()
+                and not HEADING_PATTERN.match(line)
+                and not HORIZONTAL_RULE_PATTERN.match(line)
+            ]
+            substantive_text = " ".join(substantive_lines).strip()
+            if not substantive_text or substantive_text.casefold() in LOW_INFORMATION_FRAGMENTS:
+                return
+
             context = heading_context()
             prefix = f"{context}\n\n" if context else ""
             is_atomic = (
@@ -105,6 +119,10 @@ class RAGRetriever:
                     level = len(marker.group(1))
                     heading_stack = [item for item in heading_stack if item[0] < level]
                     heading_stack.append((level, line.strip()))
+                continue
+
+            if not in_fence and HORIZONTAL_RULE_PATTERN.match(line):
+                flush()
                 continue
 
             fence = FENCE_PATTERN.match(line)
