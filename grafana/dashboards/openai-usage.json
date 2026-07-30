@@ -1,0 +1,124 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 6 },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COALESCE(SUM(total_cost_usd), 0) AS value FROM openai_usage WHERE $__timeFilter(created_at)",
+          "refId": "A"
+        }
+      ],
+      "title": "Estimated cost",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COALESCE(SUM(total_tokens), 0) AS value FROM openai_usage WHERE $__timeFilter(created_at)",
+          "refId": "A"
+        }
+      ],
+      "title": "Total tokens",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), SUM(total_cost_usd) AS cost_usd FROM openai_usage WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Estimated cost over time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens FROM openai_usage WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Tokens over time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "id": 5,
+      "options": { "footer": { "show": false }, "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT operation, model, COUNT(*) AS requests, SUM(total_tokens) AS total_tokens, SUM(total_cost_usd) AS estimated_cost_usd FROM openai_usage WHERE $__timeFilter(created_at) GROUP BY operation, model ORDER BY estimated_cost_usd DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Usage by operation and model",
+      "type": "table"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["openai", "usage", "cost"],
+  "time": { "from": "now-7d", "to": "now" },
+  "title": "OpenAI Usage and Cost",
+  "uid": "openai-usage-cost",
+  "version": 1
+}
