@@ -1,0 +1,23 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Average overall score", "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT COALESCE(AVG(overall_score), 0) AS value FROM question_quality_judgments WHERE $__timeFilter(created_at)", "format": "table", "refId": "A"}], "fieldConfig": {"defaults": {"min": 0, "max": 5, "decimals": 2}, "overrides": []}},
+    {"id": 2, "type": "stat", "title": "Quality pass rate", "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT COALESCE(AVG(CASE WHEN passed THEN 100.0 ELSE 0.0 END), 0) AS value FROM question_quality_judgments WHERE $__timeFilter(created_at)", "format": "table", "refId": "A"}], "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1}, "overrides": []}},
+    {"id": 3, "type": "stat", "title": "Average groundedness", "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT COALESCE(AVG(groundedness_score), 0) AS value FROM question_quality_judgments WHERE $__timeFilter(created_at)", "format": "table", "refId": "A"}], "fieldConfig": {"defaults": {"min": 0, "max": 5, "decimals": 2}, "overrides": []}},
+    {"id": 4, "type": "stat", "title": "Average answer correctness", "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT COALESCE(AVG(answer_correctness_score), 0) AS value FROM question_quality_judgments WHERE $__timeFilter(created_at)", "format": "table", "refId": "A"}], "fieldConfig": {"defaults": {"min": 0, "max": 5, "decimals": 2}, "overrides": []}},
+    {"id": 5, "type": "timeseries", "title": "Quality scores over time", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT created_at AS time, AVG(groundedness_score) AS groundedness, AVG(answer_correctness_score) AS answer_correctness, AVG(clarity_score) AS clarity, AVG(difficulty_score) AS difficulty FROM question_quality_judgments WHERE $__timeFilter(created_at) GROUP BY created_at ORDER BY created_at", "format": "time_series", "refId": "A"}], "fieldConfig": {"defaults": {"min": 0, "max": 5}, "overrides": []}},
+    {"id": 6, "type": "timeseries", "title": "Pass and fail attempts", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), COUNT(*) FILTER (WHERE passed) AS passed, COUNT(*) FILTER (WHERE NOT passed) AS failed FROM question_quality_judgments WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1", "format": "time_series", "refId": "A"}], "fieldConfig": {"defaults": {}, "overrides": []}},
+    {"id": 7, "type": "barchart", "title": "Scores by assigned difficulty", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT assigned_difficulty, AVG(groundedness_score) AS groundedness, AVG(answer_correctness_score) AS answer_correctness, AVG(clarity_score) AS clarity, AVG(difficulty_score) AS difficulty FROM question_quality_judgments WHERE $__timeFilter(created_at) GROUP BY assigned_difficulty ORDER BY assigned_difficulty", "format": "table", "refId": "A"}], "fieldConfig": {"defaults": {"min": 0, "max": 5}, "overrides": []}},
+    {"id": 8, "type": "table", "title": "Recent quality judgments", "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20}, "datasource": {"type": "postgres", "uid": "adaptive-postgres"}, "targets": [{"rawSql": "SELECT created_at, judge_status, passed, overall_score, groundedness_score, answer_correctness_score, clarity_score, difficulty_score, assigned_difficulty, judge_model, source_paths, question_text FROM question_quality_judgments WHERE $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 100", "format": "table", "refId": "A"}], "fieldConfig": {"defaults": {}, "overrides": []}}
+  ],
+  "schemaVersion": 39,
+  "tags": ["llm", "question-quality", "judge"],
+  "templating": {"list": []},
+  "time": {"from": "now-7d", "to": "now"},
+  "timezone": "browser",
+  "title": "Question Quality - LLM Judge",
+  "uid": "question-quality-judge",
+  "version": 1
+}

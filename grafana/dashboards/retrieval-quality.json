@@ -1,0 +1,83 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Latest Hit Rate",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [{ "rawSql": "SELECT hit_rate AS value FROM retrieval_evaluation_runs ORDER BY created_at DESC LIMIT 1", "format": "table", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2 }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Latest MRR",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [{ "rawSql": "SELECT mrr AS value FROM retrieval_evaluation_runs ORDER BY created_at DESC LIMIT 1", "format": "table", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2 }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Hit Rate by Retrieval Mode",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [{ "rawSql": "SELECT created_at AS time, search_mode, hit_rate FROM retrieval_evaluation_runs WHERE $__timeFilter(created_at) ORDER BY created_at", "format": "time_series", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "MRR by Retrieval Mode",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [{ "rawSql": "SELECT created_at AS time, search_mode, mrr FROM retrieval_evaluation_runs WHERE $__timeFilter(created_at) ORDER BY created_at", "format": "time_series", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "RRF Score by Result Rank",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [{ "rawSql": "SELECT r.created_at AS time, e.result_rank::text AS rank, AVG(e.rrf_score) AS rrf_score FROM retrieval_evaluation_results e JOIN retrieval_evaluation_runs r ON r.id = e.run_id WHERE r.search_mode = 'hybrid' AND $__timeFilter(r.created_at) GROUP BY r.created_at, e.result_rank ORDER BY r.created_at", "format": "time_series", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 5 }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "RRF Rank Components",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [{ "rawSql": "SELECT r.created_at, e.query_id, e.result_rank, e.source_path, e.vector_rank, e.lexical_rank, e.rrf_score, e.is_relevant FROM retrieval_evaluation_results e JOIN retrieval_evaluation_runs r ON r.id = e.run_id WHERE r.search_mode = 'hybrid' AND $__timeFilter(r.created_at) ORDER BY r.created_at DESC, e.query_id, e.result_rank LIMIT 200", "format": "table", "refId": "A" }],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Evaluation Runs",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [{ "rawSql": "SELECT created_at, dataset_name, search_mode, top_k, rrf_k, query_count, hit_rate, mrr, duration_ms FROM retrieval_evaluation_runs WHERE $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 100", "format": "table", "refId": "A" }],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["retrieval", "evaluation", "rrf"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "browser",
+  "title": "Retrieval Quality",
+  "uid": "retrieval-quality",
+  "version": 1
+}

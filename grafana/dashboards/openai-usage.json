@@ -1,0 +1,254 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Estimated cost",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT COALESCE(SUM(total_cost_usd), 0) AS value FROM openai_usage WHERE $__timeFilter(created_at)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 6 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total tokens",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT COALESCE(SUM(total_tokens), 0) AS value FROM openai_usage WHERE $__timeFilter(created_at)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "", "decimals": 0 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Requests",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS value FROM openai_usage WHERE $__timeFilter(created_at)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Average cost / request",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT COALESCE(AVG(total_cost_usd), 0) AS value FROM openai_usage WHERE $__timeFilter(created_at)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 6 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Cost over time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), SUM(total_cost_usd) AS cost_usd FROM openai_usage WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 6,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Tokens over time",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), SUM(input_tokens) AS input_tokens, SUM(cached_input_tokens) AS cached_input_tokens, SUM(output_tokens) AS output_tokens FROM openai_usage WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 7,
+      "type": "barchart",
+      "title": "Cost by operation",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT operation, SUM(total_cost_usd) AS cost_usd FROM openai_usage WHERE $__timeFilter(created_at) GROUP BY operation ORDER BY cost_usd DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 6 },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": { "showLegend": false }
+      }
+    },
+    {
+      "id": 8,
+      "type": "barchart",
+      "title": "Cost by model",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT model, SUM(total_cost_usd) AS cost_usd FROM openai_usage WHERE $__timeFilter(created_at) GROUP BY model ORDER BY cost_usd DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 6 },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": { "showLegend": false }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Recent OpenAI requests",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 19 },
+      "datasource": { "type": "postgres", "uid": "adaptive-postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT created_at AS time, operation, model, input_tokens, cached_input_tokens, output_tokens, total_tokens, total_cost_usd FROM openai_usage WHERE $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 100",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false }
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["openai", "usage", "cost"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timezone": "browser",
+  "title": "OpenAI Usage and Cost",
+  "uid": "openai-usage-cost",
+  "version": 1
+}

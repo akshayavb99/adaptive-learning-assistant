@@ -1,0 +1,84 @@
+﻿services:
+  pgvector:
+    image: pgvector/pgvector:0.8.5-pg17-trixie
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-adaptive_testing}
+      POSTGRES_USER: ${POSTGRES_USER:-adaptive_testing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adaptive_testing}
+      VECTOR_DIMENSIONS: ${VECTOR_DIMENSIONS:-384}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  schema-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-adaptive_testing}:${POSTGRES_PASSWORD:-adaptive_testing}@pgvector:5432/${POSTGRES_DB:-adaptive_testing}
+      VECTOR_DIMENSIONS: ${VECTOR_DIMENSIONS:-384}
+    command: ["python", "database.py", "--init"]
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      schema-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-adaptive_testing}:${POSTGRES_PASSWORD:-adaptive_testing}@pgvector:5432/${POSTGRES_DB:-adaptive_testing}
+      VECTOR_DIMENSIONS: ${VECTOR_DIMENSIONS:-384}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL:-BAAI/bge-small-en-v1.5}
+      FASTEMBED_CACHE_PATH: /models
+      DAYS_AGO: ${DAYS_AGO:-3}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+      OPENAI_JUDGE_MODEL: ${OPENAI_JUDGE_MODEL:-gpt-5.6}
+      QUESTION_JUDGE_MAX_ATTEMPTS: ${QUESTION_JUDGE_MAX_ATTEMPTS:-3}
+      QUESTION_JUDGE_PASS_THRESHOLD: ${QUESTION_JUDGE_PASS_THRESHOLD:-4.0}
+      RAG_SEARCH_MODE: ${RAG_SEARCH_MODE:-hybrid}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      OPENAI_INPUT_COST_PER_MILLION_TOKENS: ${OPENAI_INPUT_COST_PER_MILLION_TOKENS:-5}
+      OPENAI_CACHED_INPUT_COST_PER_MILLION_TOKENS: ${OPENAI_CACHED_INPUT_COST_PER_MILLION_TOKENS:-0.5}
+      OPENAI_OUTPUT_COST_PER_MILLION_TOKENS: ${OPENAI_OUTPUT_COST_PER_MILLION_TOKENS:-30}
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    volumes:
+      - ./data:/app/data:ro
+      - fastembed_models:/models
+    command: ["streamlit", "run", "streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
+
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      schema-init:
+        condition: service_completed_successfully
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-adaptive_testing}
+      POSTGRES_USER: ${POSTGRES_USER:-adaptive_testing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adaptive_testing}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  pgvector_data:
+  fastembed_models:
+  grafana_data:
+
+
